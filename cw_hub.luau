@@ -23,6 +23,7 @@ local lp         = Players.LocalPlayer
 local Settings = {
     esp       = true,
     espColor  = Color3.fromRGB(255, 64, 64),
+    visColor  = Color3.fromRGB(60, 255, 120),
     espMax    = 40,
     arrows    = true,
     arrowSize = 11,
@@ -226,11 +227,20 @@ local function headPos(plr)
     return nil
 end
 
+local function teamKey(plr)
+    local t = plr.Team
+    if t then return "team:" .. t.Name end
+    local tc = plr.TeamColor
+    if tc then return "color:" .. tostring(tc) end
+    return nil
+end
+
 local function isEnemy(plr)
-    if plr == lp then return false end
-    local myTeam = lp.Team
-    if not myTeam then return true end
-    return plr.Team ~= myTeam
+    if plr == lp or plr.UserId == lp.UserId then return false end
+    local mine = teamKey(lp)
+    local theirs = teamKey(plr)
+    if mine == nil or theirs == nil then return true end
+    return mine ~= theirs
 end
 
 local function alive(plr)
@@ -430,7 +440,14 @@ local function loop(dt)
             local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
             if hrp then
                 local pos = hrp.Position
-                candidates[#candidates + 1] = { plr = plr, pos = pos, dist = (pos - eye).Magnitude }
+                local headWorld = pos + HEAD_OFF
+                candidates[#candidates + 1] = {
+                    plr = plr,
+                    pos = pos,
+                    head = headWorld,
+                    dist = (pos - eye).Magnitude,
+                    visible = isVisible(plr, headWorld),
+                }
             end
         end
     end
@@ -455,7 +472,7 @@ local function loop(dt)
         local mid = cam:WorldToViewportPoint(c.pos)
 
         local onScreen = mid.Z > 0 and head.Z > 0
-        local color = Settings.espColor
+        local color = c.visible and Settings.visColor or Settings.espColor
 
         if onScreen then
             local rawH = math.abs(head.Y - feet.Y)
@@ -574,6 +591,11 @@ local guiOk, guiErr = pcall(function()
         Default = Color3.fromRGB(255, 64, 64),
         Title = "Цвет ESP",
         Callback = function(c) Settings.espColor = c end,
+    })
+    espGroup:AddLabel("Цвет видимого"):AddColorPicker("VisColor", {
+        Default = Color3.fromRGB(60, 255, 120),
+        Title = "Цвет видимого врага",
+        Callback = function(c) Settings.visColor = c end,
     })
 
     local aimGroup = Combat:AddRightGroupbox("Silent Aim")
