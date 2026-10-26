@@ -30,8 +30,8 @@ local Settings = {
     silent    = false,
     fov       = 160,
     showFov   = true,
-    aimIgnoreFov = false,
-    wallCheck = true,
+    wCheck    = true,
+    aimIgnoreFov = true,
     smooth    = false,
 }
 
@@ -288,7 +288,9 @@ local function pickTarget(origin, lookDir)
                         local dx, dy = sp.X - vp.X / 2, sp.Y - vp.Y / 2
                         inFov = math.sqrt(dx * dx + dy * dy) <= silentState.fov
                     end
-                    if inFov or Settings.aimIgnoreFov then
+                    local passFov = inFov or Settings.aimIgnoreFov
+                    local passWall = (not Settings.wCheck) or isVisible(plr, hp)
+                    if passFov and passWall then
                         best = { plr = plr, pos = hp }
                         bestDist = worldDist
                     end
@@ -428,13 +430,7 @@ local function loop(dt)
             local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
             if hrp then
                 local pos = hrp.Position
-                local visible = true
-                if Settings.wallCheck then
-                    visible = isVisible(plr, pos + HEAD_OFF)
-                end
-                if visible then
-                    candidates[#candidates + 1] = { plr = plr, pos = pos, dist = (pos - eye).Magnitude }
-                end
+                candidates[#candidates + 1] = { plr = plr, pos = pos, dist = (pos - eye).Magnitude }
             end
         end
     end
@@ -559,11 +555,6 @@ local guiOk, guiErr = pcall(function()
         Default = true,
         Callback = function(v) Settings.arrows = v end,
     })
-    espGroup:AddToggle("EspWallCheck", {
-        Text = "Wall Check (только видимые)",
-        Default = true,
-        Callback = function(v) Settings.wallCheck = v end,
-    })
     espGroup:AddSlider("EspMax", {
         Text = "Максимум целей",
         Min = 5, Max = 80, Default = 40, Rounding = 0,
@@ -602,12 +593,16 @@ local guiOk, guiErr = pcall(function()
             silentState.fov = v
         end,
     })
+    aimGroup:AddToggle("AimWallCheck", {
+        Text = "Wall Check (только видимые цели)",
+        Default = true,
+        Callback = function(v) Settings.wCheck = v end,
+    })
     aimGroup:AddToggle("AimIgnoreFov", {
         Text = "Бить по ближнему (игнор FOV)",
         Default = true,
         Callback = function(v) Settings.aimIgnoreFov = v end,
-    })
-    aimGroup:AddToggle("FovCircle", {
+    })    aimGroup:AddToggle("FovCircle", {
         Text = "Круг FOV",
         Default = true,
         Callback = function(v) Settings.showFov = v end,
