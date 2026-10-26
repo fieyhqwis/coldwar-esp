@@ -197,48 +197,51 @@ local function applyEffects()
     }, "|")
     if sig == lastSigF then return end
     lastSigF = sig
-    local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
-    if not cc then
-        cc = Instance.new("ColorCorrectionEffect")
-        cc.Name = "CW_CC"
-        cc.Parent = Lighting
-    end
-    local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
-    if not bloom then
-        bloom = Instance.new("BloomEffect")
-        bloom.Name = "CW_Bloom"
-        bloom.Parent = Lighting
-    end
-    local blur = Lighting:FindFirstChildOfClass("BlurEffect")
-    if not blur then
-        blur = Instance.new("BlurEffect")
-        blur.Name = "CW_Blur"
-        blur.Parent = Lighting
-    end
 
-    if C.fxUse then
-        cc.Enabled = true
-        cc.TintColor = C.fxTint
-        cc.Brightness = C.fxBrightness
-        cc.Contrast = C.fxContrast
-        cc.Saturation = C.fxSaturation
-        bloom.Enabled = C.fxBloomOn
-        bloom.Intensity = C.fxBloomIntensity
-        bloom.Size = C.fxBloomSize
-        bloom.Threshold = C.fxBloomThreshold
-        blur.Enabled = C.fxBlurOn
-        blur.Size = C.fxBlurSize
-    else
+    if not C.fxUse then
         for _, e in ipairs(Lighting:GetChildren()) do
             if e:IsA("PostEffect") and e.Name ~= "CW_CC" and e.Name ~= "CW_Bloom" and e.Name ~= "CW_Blur" then
                 if saved.effects[e] == nil then saved.effects[e] = e.Enabled end
                 e.Enabled = false
             end
         end
-        cc.Enabled = false
-        bloom.Enabled = false
-        blur.Enabled = false
+        for _, n in ipairs({ "CW_CC", "CW_Bloom", "CW_Blur" }) do
+            local o = Lighting:FindFirstChild(n)
+            if o then pcall(function() o.Enabled = false end) end
+        end
+        return
     end
+
+    local cc = Lighting:FindFirstChild("CW_CC")
+    if not cc then
+        cc = Instance.new("ColorCorrectionEffect")
+        cc.Name = "CW_CC"
+        cc.Parent = Lighting
+    end
+    local bloom = Lighting:FindFirstChild("CW_Bloom")
+    if not bloom then
+        bloom = Instance.new("BloomEffect")
+        bloom.Name = "CW_Bloom"
+        bloom.Parent = Lighting
+    end
+    local blur = Lighting:FindFirstChild("CW_Blur")
+    if not blur then
+        blur = Instance.new("BlurEffect")
+        blur.Name = "CW_Blur"
+        blur.Parent = Lighting
+    end
+
+    cc.Enabled = true
+    cc.TintColor = C.fxTint
+    cc.Brightness = C.fxBrightness
+    cc.Contrast = C.fxContrast
+    cc.Saturation = C.fxSaturation
+    bloom.Enabled = C.fxBloomOn
+    bloom.Intensity = C.fxBloomIntensity
+    bloom.Size = C.fxBloomSize
+    bloom.Threshold = C.fxBloomThreshold
+    blur.Enabled = C.fxBlurOn
+    blur.Size = C.fxBlurSize
 end
 
 local function applySkybox()
@@ -252,8 +255,6 @@ local function applySkybox()
     end
 end
 
-killWeather()
-applyQuality()
 applyLighting()
 applyAtmosphere()
 applyEffects()
@@ -654,7 +655,10 @@ local function loop(dt)
     local now = tick()
 
     if now - lastZoom > 1 then lastZoom = now applyZoom() end
-    if not C.weatherOn then killWeather() end
+    if not C.weatherOn and (now - lastWeather) > 0.5 then
+        lastWeather = now
+        killWeather()
+    end
     if now - lastSlow > 0.5 then
         lastSlow = now
         applyLighting()
@@ -975,6 +979,7 @@ end)
 --=========================================================
 --  GUI
 --=========================================================
+task.delay(6, function()
 local guiOk, guiErr = pcall(function()
     local Library = loadstring(game:HttpGet(
         "https://raw.githubusercontent.com/deividcomsono/Obsidian/refs/heads/main/Library.lua"))()
@@ -1234,6 +1239,8 @@ local guiOk, guiErr = pcall(function()
     ---------------------------------------------------------------
     local mG = Misc:AddGroupbox({ Side = "Left", Name = "Utility", IconName = "settings" })
     mG:AddToggle("antiAfk", { Text = "Anti AFK", Default = true, Callback = function(v) C.antiAfk = v end })
+    mG:AddToggle("lowGraphics", { Text = "Low Graphics (fps, heavy)", Default = false,
+        Callback = function(v) if v then applyQuality() end end })
     mG:AddToggle("noSuppression", { Text = "No Suppression / Flash", Default = true,
         Callback = function(v) C.noSuppression = v end })
     mG:AddButton({ Text = "Reapply World", Func = function()
@@ -1253,5 +1260,6 @@ local guiOk, guiErr = pcall(function()
 end)
 
 if not guiOk then warn("[CW] GUI failed: " .. tostring(guiErr)) end
+end)
 
 print("[CW] loaded | esp=" .. tostring(C.espEnabled) .. " | silent=" .. tostring(C.saEnabled))
