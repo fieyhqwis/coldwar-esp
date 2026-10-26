@@ -30,6 +30,8 @@ local Settings = {
     silent    = false,
     fov       = 160,
     showFov   = true,
+    aimIgnoreFov = false,
+    wallCheck = true,
     smooth    = false,
 }
 
@@ -238,30 +240,64 @@ local function alive(plr)
     return hum ~= nil and hum.Health > 0
 end
 
+--=========================================================
+--  WALL CHECK
+--=========================================================
+local visCache = {}
+local VIS_TTL = 0.12
+local visParams = RaycastParams.new()
+visParams.FilterType = Enum.RaycastFilterType.Exclude
+visParams.IgnoreWater = true
+
+local function isVisible(plr, worldPos)
+    local now = tick()
+    local c = visCache[plr]
+    if c and (now - c.t) < VIS_TTL then return c.v end
+
+    local visible = false
+    local cam = Workspace.CurrentCamera
+    if cam then
+        local exclude = {}
+        if lp.Character then exclude[#exclude + 1] = lp.Character end
+        if plr.Character then exclude[#exclude + 1] = plr.Character end
+        visParams.FilterDescendantsInstances = exclude
+        local origin = cam.CFrame.Position
+        local hit = Workspace:Raycast(origin, worldPos - origin, visParams)
+        visible = (hit == nil)
+    end
+
+    visCache[plr] = { v = visible, t = now }
+    return visible
+end
+
 local function pickTarget(origin, lookDir)
     local cam = Workspace.CurrentCamera
     if not cam then return nil end
     local vp = cam.ViewportSize
-    local best, bestScore = nil, math.huge
+    local best, bestDist = nil, math.huge
+
     for _, plr in ipairs(Players:GetPlayers()) do
         if isEnemy(plr) and alive(plr) then
             local hp = headPos(plr)
             if hp then
-                local sp = cam:WorldToViewportPoint(hp)
-                if sp.Z > 0 then
-                    local dx, dy = sp.X - vp.X / 2, sp.Y - vp.Y / 2
-                    local screenDist = math.sqrt(dx * dx + dy * dy)
-                    if screenDist <= silentState.fov then
-                        local worldDist = (hp - origin).Magnitude
-                        if worldDist < bestScore then
-                            best, bestScore = { plr = plr, pos = hp }, worldDist
-                        end
+                local worldDist = (hp - origin).Magnitude
+                if worldDist < bestDist then
+                    local sp = cam:WorldToViewportPoint(hp)
+                    local inFov = false
+                    if sp.Z > 0 then
+                        local dx, dy = sp.X - vp.X / 2, sp.Y - vp.Y / 2
+                        inFov = math.sqrt(dx * dx + dy * dy) <= silentState.fov
+                    end
+                    if inFov or Settings.aimIgnoreFov then
+                        best = { plr = plr, pos = hp }
+                        bestDist = worldDist
                     end
                 end
             end
         end
     end
-    return best
+
+    return best, bestDist
 end
 
 local function installSilentAim()
@@ -392,7 +428,13 @@ local function loop(dt)
             local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
             if hrp then
                 local pos = hrp.Position
-                candidates[#candidates + 1] = { plr = plr, pos = pos, dist = (pos - eye).Magnitude }
+                local visible = true
+                if Settings.wallCheck then
+                    visible = isVisible(plr, pos + HEAD_OFF)
+                end
+                if visible then
+                    candidates[#candidates + 1] = { plr = plr, pos = pos, dist = (pos - eye).Magnitude }
+                end
             end
         end
     end
@@ -517,6 +559,11 @@ local guiOk, guiErr = pcall(function()
         Default = true,
         Callback = function(v) Settings.arrows = v end,
     })
+    espGroup:AddToggle("EspWallCheck", {
+        Text = "Wall Check (только видимые)",
+        Default = true,
+        Callback = function(v) Settings.wallCheck = v end,
+    })
     espGroup:AddSlider("EspMax", {
         Text = "Максимум целей",
         Min = 5, Max = 80, Default = 40, Rounding = 0,
@@ -554,6 +601,11 @@ local guiOk, guiErr = pcall(function()
             Settings.fov = v
             silentState.fov = v
         end,
+    })
+    aimGroup:AddToggle("AimIgnoreFov", {
+        Text = "Бить по ближнему (игнор FOV)",
+        Default = true,
+        Callback = function(v) Settings.aimIgnoreFov = v end,
     })
     aimGroup:AddToggle("FovCircle", {
         Text = "Круг FOV",
