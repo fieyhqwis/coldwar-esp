@@ -6,6 +6,10 @@
     loadstring(game:HttpGet("https://raw.githubusercontent.com/fieyhqwis/coldwar-esp/main/cw_lean.luau"))()
 ]]
 
+if getgenv().CW_CLEANUP then
+    pcall(function() getgenv().CW_CLEANUP() end)
+end
+
 local STATE = STATE or {
     onCleanup = function() end,
     connect = function(sig, fn) return sig:Connect(fn) end,
@@ -284,6 +288,8 @@ local FEET_OFF = Vector3.new(0, 2.6, 0)
 local candidates = {}
 local used = {}
 local accum = 0
+local running = true
+local myConn
 local FRAME_DT = 1 / CFG.tickHz
 local lastWeather = 0
 
@@ -305,7 +311,8 @@ local function drawCorners(e, x, y, w, h, color)
     end
 end
 
-STATE.connect(RunService.Heartbeat, function(dt)
+myConn = RunService.Heartbeat:Connect(function(dt)
+    if not running then return end
     accum = accum + dt
     if accum < FRAME_DT then return end
     accum = 0
@@ -413,3 +420,20 @@ STATE.connect(RunService.Heartbeat, function(dt)
         print("[CW Lean] loaded | esp=" .. tostring(CFG.esp) .. " | silent=" .. tostring(SA.enabled))
     end
 end)
+
+--=========================================================
+--  SELF CLEANUP (stops stacking on repeat runs)
+--=========================================================
+getgenv().CW_CLEANUP = function()
+    running = false
+    if myConn then
+        pcall(function() myConn:Disconnect() end)
+        myConn = nil
+    end
+    for _, e in pairs(pool) do destroyEntry(e) end
+    table.clear(pool)
+    for _, o in ipairs(objs) do pcall(function() o:Remove() end) end
+    table.clear(objs)
+    if getgenv().CW_LEAN_UNHOOK then pcall(getgenv().CW_LEAN_UNHOOK) end
+    print("[CW Lean] previous instance cleaned")
+end
