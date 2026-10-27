@@ -115,7 +115,14 @@ local function killWeather()
     if cam then
         for _, n in ipairs({ "__WeatherSky", "__WeatherAround" }) do
             local p = cam:FindFirstChild(n)
-            if p then pcall(function() p:Destroy() end) end
+            if p then
+                for _, d in ipairs(p:GetDescendants()) do
+                    if d:IsA("ParticleEmitter") then
+                        if d.Enabled then d.Enabled = false end
+                        if d.Rate ~= 0 then d.Rate = 0 end
+                    end
+                end
+            end
         end
     end
     for _, ch in ipairs(Lighting:GetChildren()) do
@@ -133,7 +140,6 @@ local function killEffects()
             pcall(function() e.Enabled = false end)
         end
     end
-    pcall(function() Lighting.GlobalShadows = false end)
     Lighting.FogStart = 0
     Lighting.FogEnd = 1e9
 end
